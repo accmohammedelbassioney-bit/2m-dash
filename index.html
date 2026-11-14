@@ -26,7 +26,7 @@
   button.nav { background: var(--bg2); color: var(--tx); border: 0; border-radius: 10px; padding: 6px 12px; font-size: 15px; }
   select { width: 100%; margin-top: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(0,0,0,.12); background: var(--bg); color: var(--tx); font-size: 15px; }
   .tabs { display: flex; gap: 6px; overflow-x: auto; margin-top: 10px; scrollbar-width: none; }
-  .tabs button { flex: 0 0 auto; border: 0; border-radius: 20px; padding: 6px 14px; background: var(--bg2); color: var(--tx); font-size: 14px; }
+  .tabs button { flex: 0 0 auto; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; border: 0; border-radius: 20px; padding: 6px 14px; background: var(--bg2); color: var(--tx); font-size: 14px; }
   .tabs button.on { background: var(--accent); color: var(--accent-tx); }
   main { padding: 12px; }
   .card { background: var(--bg); border-radius: var(--r); padding: 14px; margin-bottom: 12px; }
@@ -157,16 +157,22 @@ const views = {
 
 function render() {
   const d = state.data; if (!d) return;
-  header(d);
-  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === state.tab));
-  document.getElementById("main").innerHTML = views[state.tab](d);
+  try { header(d); } catch (e) { console.error(e); }
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.getAttribute("data-t") === state.tab));
+  let html;
+  try { html = views[state.tab](d); } catch (e) { console.error(e); html = `<div class="err">حصلت مشكلة في عرض القسم ده (${esc(e.message)})</div>`; }
+  document.getElementById("main").innerHTML = html;
+  window.scrollTo(0, 0);
 }
 
 function shift(k) { const [y, m] = state.month.split("-").map(Number); const dt = new Date(Date.UTC(y, m - 1 + k, 1)); state.month = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`; load(); }
 document.getElementById("prev").onclick = () => shift(-1);
 document.getElementById("next").onclick = () => shift(1);
 document.getElementById("emp").onchange = (e) => { state.emp = e.target.value; load(); };
-document.getElementById("tabs").onclick = (e) => { const t = e.target.dataset && e.target.dataset.t; if (t) { state.tab = t; render(); } };
+document.querySelectorAll("#tabs button").forEach((b) => {
+  const go = (ev) => { ev.preventDefault(); state.tab = b.getAttribute("data-t"); render(); if (tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged(); };
+  b.addEventListener("click", go);
+});
 load();
 </script>
 </body>
