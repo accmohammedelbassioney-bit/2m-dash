@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>لوحتي — 2M For Audit</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --bg2: var(--tg-theme-secondary-bg-color, #f2f3f5);
+    --tx: var(--tg-theme-text-color, #1b1d21);
+    --hint: var(--tg-theme-hint-color, #7a7f87);
+    --accent: var(--tg-theme-button-color, #2f6fde);
+    --accent-tx: var(--tg-theme-button-text-color, #ffffff);
+    --ok: #1f9d55; --warn: #c27c0e; --bad: #d23c3c;
+    --r: 14px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Tahoma, "Noto Sans Arabic", sans-serif; background: var(--bg2); color: var(--tx); font-size: 15px; line-height: 1.5; }
+  header { background: var(--bg); padding: 14px 16px 10px; position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 rgba(0,0,0,.06); }
+  h1 { font-size: 18px; margin: 0; }
+  .sub { color: var(--hint); font-size: 13px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .month { margin-top: 8px; justify-content: space-between; }
+  button.nav { background: var(--bg2); color: var(--tx); border: 0; border-radius: 10px; padding: 6px 12px; font-size: 15px; }
+  select { width: 100%; margin-top: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(0,0,0,.12); background: var(--bg); color: var(--tx); font-size: 15px; }
+  .tabs { display: flex; gap: 6px; overflow-x: auto; margin-top: 10px; scrollbar-width: none; }
+  .tabs button { flex: 0 0 auto; border: 0; border-radius: 20px; padding: 6px 14px; background: var(--bg2); color: var(--tx); font-size: 14px; }
+  .tabs button.on { background: var(--accent); color: var(--accent-tx); }
+  main { padding: 12px; }
+  .card { background: var(--bg); border-radius: var(--r); padding: 14px; margin-bottom: 12px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .tile { background: var(--bg2); border-radius: 12px; padding: 10px 8px; text-align: center; }
+  .tile b { display: block; font-size: 20px; }
+  .tile span { color: var(--hint); font-size: 12px; }
+  .tile.bad b { color: var(--bad); } .tile.ok b { color: var(--ok); } .tile.warn b { color: var(--warn); }
+  .bar { height: 10px; background: var(--bg2); border-radius: 6px; overflow: hidden; margin: 6px 0 2px; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .bar.bad i { background: var(--bad); } .bar.warn i { background: var(--warn); }
+  ul.list { list-style: none; margin: 0; padding: 0; }
+  ul.list li { padding: 9px 0; border-top: 1px solid rgba(0,0,0,.06); display: flex; justify-content: space-between; gap: 10px; }
+  ul.list li:first-child { border-top: 0; }
+  .muted { color: var(--hint); font-size: 13px; }
+  .tag { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--bg2); white-space: nowrap; }
+  .tag.bad { background: rgba(210,60,60,.12); color: var(--bad); }
+  .tag.ok { background: rgba(31,157,85,.12); color: var(--ok); }
+  .tag.warn { background: rgba(194,124,14,.14); color: var(--warn); }
+  .empty { color: var(--hint); text-align: center; padding: 8px 0; }
+  .err { padding: 40px 20px; text-align: center; color: var(--hint); }
+  .num { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="name">لوحتي</h1>
+  <div class="sub" id="meta">جاري التحميل…</div>
+  <select id="emp" hidden aria-label="اختار الموظف"></select>
+  <div class="row month">
+    <button class="nav" id="prev" aria-label="الشهر اللي فات">‹</button>
+    <b id="mlabel"></b>
+    <button class="nav" id="next" aria-label="الشهر الجاي">›</button>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button data-t="att" class="on">الحضور</button>
+    <button data-t="leave">الإجازات</button>
+    <button data-t="disc">الجزاءات</button>
+    <button data-t="tasks">المهام</button>
+    <button data-t="money">السلف والعهد</button>
+  </nav>
+</header>
+<main id="main"><div class="err">جاري التحميل…</div></main>
+
+<script>
+const API = "https://lpvtjmmdvdeexrzqrohi.supabase.co/functions/v1/tg-bot?dash=1";
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+const AR_M = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+const AR_D = ["الحد","الاتنين","التلات","الأربع","الخميس","الجمعة","السبت"];
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fd = (iso) => { if (!iso) return "من غير ميعاد"; const d = new Date(iso + "T12:00:00Z"); return `${AR_D[d.getUTCDay()]} ${d.getUTCDate()}/${d.getUTCMonth() + 1}`; };
+const n = (x) => Number(x || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
+let state = { month: null, emp: null, tab: "att", data: null };
+
+async function load() {
+  document.getElementById("main").innerHTML = '<div class="err">جاري التحميل…</div>';
+  try {
+    const r = await fetch(API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ initData: tg ? tg.initData : "", month: state.month, emp: state.emp }) });
+    const j = await r.json();
+    if (!r.ok || j.error) throw new Error(j.error || "حصلت مشكلة");
+    state.data = j; state.month = j.month; state.emp = j.me.id;
+    render();
+  } catch (e) {
+    document.getElementById("main").innerHTML = `<div class="err">${esc(e.message)}</div>`;
+    document.getElementById("meta").textContent = "";
+  }
+}
+
+function header(d) {
+  document.getElementById("name").textContent = d.me.name;
+  document.getElementById("meta").textContent = `فرع ${d.me.branch || ""}${d.me.mode === "remote" ? " · من البيت" : ""} · المواعيد ${d.hours.start}–${d.hours.end}`;
+  const [y, m] = d.month.split("-").map(Number);
+  document.getElementById("mlabel").textContent = `${AR_M[m - 1]} ${y}`;
+  document.getElementById("next").disabled = d.month >= d.today.slice(0, 7);
+  const sel = document.getElementById("emp");
+  if (d.team && d.team.length > 1) {
+    sel.hidden = false;
+    sel.innerHTML = d.team.map((e) => `<option value="${e.id}" ${e.id === d.me.id ? "selected" : ""}>${esc(e.name)} — ${esc(e.branch)}</option>`).join("");
+  }
+}
+
+function tiles(items) { return `<div class="tiles">${items.map(([v, l, c]) => `<div class="tile ${c || ""}"><b class="num">${v}</b><span>${l}</span></div>`).join("")}</div>`; }
+
+const views = {
+  att(d) {
+    const a = d.att;
+    const rows = (a.days || []).slice().reverse().map((x) => {
+      let tag = "", cls = "";
+      if (x.leave) { tag = `إجازة ${x.leave}`; cls = "ok"; }
+      else if (x.holiday) { tag = "إجازة رسمية"; }
+      else if (!x.in && x.workday && x.day < d.today) { tag = "غياب"; cls = "bad"; }
+      else if (x.kind === "mission") { tag = "مأمورية"; }
+      else if (x.late > 5) { tag = `متأخر ${x.late} د${x.excused ? " (معذور)" : ""}`; cls = x.excused ? "" : "warn"; }
+      else if (x.in) { tag = "في الميعاد"; cls = "ok"; }
+      const times = x.in ? `${x.in}${x.out ? " ← " + x.out : " ← لسه"}` : "";
+      return `<li><div><b>${fd(x.day)}</b><div class="muted">${times}${x.perm && x.perm.length ? " · " + esc(x.perm.join("، ")) : ""}${x.kind === "remote" ? " · من البيت" : ""}</div></div><span class="tag ${cls}">${tag}</span></li>`;
+    }).join("");
+    return `<section class="card"><h2>الشهر ده</h2>${tiles([[`${a.present}/${a.workdays}`, "أيام حضور"], [a.late_days, "مرات تأخير", a.late_days ? "warn" : "ok"], [(a.absent_days || []).length, "غياب", (a.absent_days || []).length ? "bad" : "ok"], [a.late_minutes, "دقايق تأخير"], [a.leave_days, "أيام إجازة"], [a.missing_checkout, "انصراف مش متسجل", a.missing_checkout ? "warn" : ""]])}</section>
+      <section class="card"><h2>يوم بيوم</h2><ul class="list">${rows || '<li class="empty">مفيش أيام لسه</li>'}</ul></section>`;
+  },
+  leave(d) {
+    const l = d.leave;
+    const rows = (l.list || []).map((x) => `<li><div><b>${esc(x.kind)}</b><div class="muted">${fd(x.from)}${x.to !== x.from ? " ← " + fd(x.to) : ""} · ${n(x.days)} يوم</div></div><span class="tag ${x.status === "approved" ? "ok" : x.status === "rejected" ? "bad" : x.status === "pending" ? "warn" : ""}">${{ approved: "متوافق عليها", pending: "مستنية موافقة", rejected: "اترفضت", cancelled: "اتلغت" }[x.status] || x.status}</span></li>`).join("");
+    const pct = l.entitlement ? Math.min(100, (l.used / l.entitlement) * 100) : 0;
+    return `<section class="card"><h2>رصيد ${l.year}</h2>${tiles([[n(l.remaining), "متبقي", l.remaining <= 2 ? "warn" : "ok"], [n(l.used), "مستخدم"], [n(l.entitlement), "الرصيد السنوي"], [n(l.casual_used), "عارضة"], [n(l.sick_days), "مرضي"], [n(l.pending), "طلبات مستنية"]])}
+      <div class="bar"><i style="width:${pct}%"></i></div><div class="muted">استخدمت ${n(l.used)} من ${n(l.entitlement)} يوم</div></section>
+      <section class="card"><h2>طلبات الإجازة</h2><ul class="list">${rows || '<li class="empty">مفيش إجازات السنة دي</li>'}</ul><p class="muted">لطلب إجازة اكتبلها للبوت أو من «🧰 طلباتي».</p></section>`;
+  },
+  disc(d) {
+    const s = d.discipline; const pct = Math.min(100, (s.month_deduct / s.cap) * 100);
+    const rows = (s.cases || []).map((c) => `<li><div><b>${esc(c.what)}</b><div class="muted">${fd(c.day)} · ${esc(c.penalty || "")}${c.deduct ? ` · خصم ${n(c.deduct)} يوم` : ""}</div>${c.open ? `<div class="muted">⏳ رد عليها من البوت قبل ${esc((c.due || "").slice(0, 10))}</div>` : ""}</div><span class="tag ${c.open ? "warn" : ""}">${esc(c.status)}</span></li>`).join("");
+    return `<section class="card"><h2>الخصم الشهر ده</h2><div class="bar ${pct >= 80 ? "bad" : pct >= 40 ? "warn" : ""}"><i style="width:${pct}%"></i></div><div class="muted">${n(s.month_deduct)} من ${s.cap} أيام (الحد الأقصى في اللائحة م26)</div></section>
+      <section class="card"><h2>المخالفات السنة دي</h2><ul class="list">${rows || '<li class="empty">مفيش أي مخالفات 👏</li>'}</ul></section>`;
+  },
+  tasks(d) {
+    const t = d.tasks; const rate = t.done_month ? Math.round((t.on_time / t.done_month) * 100) : null;
+    const rows = (t.list || []).map((x) => `<li><div><b>#${x.id} ${esc(x.title)}</b><div class="muted">${fd(x.due)}${x.progress ? ` · ${x.progress}%` : ""}</div></div><span class="tag ${x.late ? "bad" : x.status === "blocked" ? "warn" : ""}">${x.late ? "متأخرة" : { open: "مفتوحة", in_progress: "شغال", blocked: "متعطلة" }[x.status] || x.status}</span></li>`).join("");
+    return `<section class="card"><h2>المهام</h2>${tiles([[t.open, "مفتوحة"], [t.overdue, "متأخرة", t.overdue ? "bad" : "ok"], [t.done_month, "خلصت الشهر ده", "ok"]])}${rate !== null ? `<div class="bar"><i style="width:${rate}%"></i></div><div class="muted">${rate}% اتقفلت في ميعادها</div>` : ""}</section>
+      <section class="card"><h2>المفتوحة</h2><ul class="list">${rows || '<li class="empty">مفيش مهام مفتوحة 👌</li>'}</ul></section>`;
+  },
+  money(d) {
+    const rows = (d.money || []).map((m) => `<li><div><b>${esc(m.kind)} #${m.id} — ${n(m.amount)} ج</b><div class="muted">${esc(m.purpose || "")}${m.left && m.left.length ? ` · فاضل: ${m.left.map((x) => `${n(x.amount)} (${x.month})`).join("، ")}` : ""}</div></div><span class="tag">${esc(m.status)}</span></li>`).join("");
+    return `<section class="card"><h2>السلف والعهد المفتوحة</h2><ul class="list">${rows || '<li class="empty">مفيش سلف ولا عهد مفتوحة 👌</li>'}</ul><p class="muted">قسيمة المرتب هتظهر هنا أول ما المرتبات تتعمل على Stepora.</p></section>`;
+  },
+};
+
+function render() {
+  const d = state.data; if (!d) return;
+  header(d);
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === state.tab));
+  document.getElementById("main").innerHTML = views[state.tab](d);
+}
+
+function shift(k) { const [y, m] = state.month.split("-").map(Number); const dt = new Date(Date.UTC(y, m - 1 + k, 1)); state.month = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`; load(); }
+document.getElementById("prev").onclick = () => shift(-1);
+document.getElementById("next").onclick = () => shift(1);
+document.getElementById("emp").onchange = (e) => { state.emp = e.target.value; load(); };
+document.getElementById("tabs").onclick = (e) => { const t = e.target.dataset && e.target.dataset.t; if (t) { state.tab = t; render(); } };
+load();
+</script>
+</body>
+</html>
